@@ -39,4 +39,23 @@ For almost any forecasting prompt, say this before naming a model:
 
 > I will define the forecast origin, horizon, information available at prediction time, business loss, and deployment cadence; inspect temporal structure and data quality; establish seasonal-naive baselines; use walk-forward validation with leakage-safe feature construction; compare simple and complex candidates on several origins; inspect residuals and stability; then retrain and monitor.
 
-That paragraph prevents most serious mistakes.
+In plain language, this means:
+
+- **Forecast origin:** When is the prediction made? For example, every Monday at 09:00.
+- **Horizon:** How far into the future are we predicting? For example, the next seven days.
+- **Information available at prediction time:** Which data genuinely exists when the prediction is made? This prevents accidentally using future information.
+- **Business loss:** Which mistakes matter most? For inventory, predicting too little demand may be more costly than predicting too much.
+- **Deployment cadence:** How often will predictions be produced, and how often will the model be retrained?
+- **Temporal structure and data quality:** Look for trends, seasonality, missing values, outliers, and changes in behaviour over time.
+- **Seasonal-naive baseline:** Start with a simple forecast such as "next Monday will be like last Monday." A more complex model should beat it.
+- **Walk-forward validation:** Simulate real use by training on the past, predicting the next period, moving forward, and repeating.
+- **Leakage-safe features:** Build every feature using only information that would have been available at that historical prediction time.
+- **Several forecast origins:** Compare models across many historical prediction dates, not just one convenient train/test split.
+- **Residuals and stability:** Examine the errors to find periods or situations in which the model fails or becomes unreliable.
+- **Retraining and monitoring:** After deployment, update the model and watch for deteriorating accuracy or changes in the data.
+
+For example:
+
+> Every Monday, I need to predict store demand for the next seven days. I can use sales and weather forecasts available by Monday morning, but not actual weather or sales from later in the week. Stockouts cost more than excess inventory. I will compare models against "the same weekday last week," test them by repeatedly simulating past Mondays, inspect their errors, and monitor their performance after deployment.
+
+This process prevents common forecasting mistakes—especially future-data leakage, unrealistic evaluation, and a poorly defined business objective—before model selection even begins.
