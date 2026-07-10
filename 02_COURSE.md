@@ -1,6 +1,6 @@
 # Time Series Interview Sprint
 
-Notation: (y_t) is the target at time (t); (h) is forecast horizon; \(\hat y_{t+h|t}\) is a forecast made using information available through (t). Code assumes `pandas as pd` and `numpy as np`.
+Notation: `y(t)` is the target at time `t`; `h` is the forecast horizon; `forecast(t + h | t)` means a forecast for time `t + h` made with information available through time `t`. Code assumes `pandas as pd` and `numpy as np`.
 
 ---
 
@@ -22,32 +22,70 @@ A covariate recorded for tomorrow is not necessarily known today. Planned price 
 
 ## 1.2 Components and dependence
 
-A useful descriptive decomposition is
+A time-series value can often be understood as three parts:
 
-\[
-y_t = T_t + S_t + R_t \quad\text{(additive)},
-\]
+```text
+observed value = trend + seasonality + remainder
+y(t)           = T(t)  + S(t)        + R(t)
+```
 
-or (y_t=T_tS_tR_t) when seasonal amplitude grows with the level. A log transform turns a positive multiplicative relationship approximately additive:
+- **Trend:** the long-term direction or slow change in level.
+- **Seasonality:** a pattern that repeats at a known frequency, such as every day, week, or year.
+- **Remainder/noise:** variation not explained by the trend or seasonal pattern.
+- **Cycle:** a longer rise and fall whose duration is not fixed, unlike seasonality.
+- **Structural break:** a change in the data-generating mechanism; after a break, older data may become less useful.
 
-\[
-\log y_t=\log T_t+\log S_t+\log R_t.
-\]
+For example, consider daily ice-cream sales. Gradual business growth is the **trend**, higher sales every summer are **seasonality**, and changes caused by rain or local events are part of the **remainder**.
 
-- **Trend:** slow change in level.
-- **Seasonality:** repeated pattern at a known/calendar frequency.
-- **Cycle:** irregular longer movement, not fixed-period seasonality.
-- **Noise:** unpredictable component, possibly with changing variance.
-- **Structural break:** mechanism changes; old data may become harmful.
+### Additive versus multiplicative seasonality
 
-Time series violate the IID assumption because observations can be dependent. Autocovariance and autocorrelation at lag (k) are
+Use an **additive** description when the seasonal change stays roughly constant in absolute size:
 
-\[
-\gamma_k=\operatorname{Cov}(y_t,y_{t-k}),\qquad
-\rho_k=\gamma_k/\gamma_0.
-\]
+```text
+Normal sales:   100  -> 200
+Summer effect:  +30  -> +30
+Summer sales:   130  -> 230
+```
 
-Sample ACF estimates ρ across lags. Large lag-7 ACF for daily data suggests weekly repetition, but ACF is descriptive—not proof of causality.
+The summer effect remains about `+30` as the business grows:
+
+```text
+observed value = trend + seasonality + remainder
+```
+
+Use a **multiplicative** description when the seasonal change grows with the level:
+
+```text
+Normal sales:   100  -> 200
+Summer effect:  x1.3 -> x1.3
+Summer sales:   130  -> 260
+```
+
+Here, the effect remains `+30%`, but its absolute size increases. This is described as:
+
+```text
+observed value = trend x seasonality x remainder
+```
+
+Taking the logarithm turns multiplication into addition, which can make this pattern easier to model:
+
+```text
+log(observed value) = log(trend) + log(seasonality) + log(remainder)
+```
+
+The key distinction is: **additive seasonality has a roughly constant absolute effect, whereas multiplicative seasonality has a roughly constant percentage effect.**
+
+### Dependence over time
+
+Ordinary machine-learning examples are often assumed to be independent. Time-series observations usually are not: today's value may resemble yesterday's value or the value from the same weekday last week.
+
+**Autocorrelation** measures how strongly a series resembles an earlier version of itself. A *lag* says how far back to compare:
+
+- Lag 1 compares today with yesterday for daily data.
+- Lag 7 compares today with the same weekday last week.
+- A large lag-7 autocorrelation suggests weekly repetition.
+
+Autocorrelation describes a relationship; it does not prove that the earlier value caused the later one. A shared trend can also make autocorrelation look strong.
 
 ## 1.3 Minimal EDA protocol
 
