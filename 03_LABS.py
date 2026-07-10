@@ -1,6 +1,6 @@
-"""Runnable student labs. Search TODO; solutions are in SOLUTIONS.md.
+"""Runnable student labs. Search TODO; solutions are in 04_SOLUTIONS.md.
 
-Run sections interactively (`python -i LABS.py`) or paste them into a notebook.
+Run sections interactively (`python -i 03_LABS.py`) or paste them into a notebook.
 The asserts provide quick feedback but do not reveal the implementation.
 """
 import numpy as np

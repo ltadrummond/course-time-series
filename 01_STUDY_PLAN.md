@@ -20,7 +20,7 @@ The target is competence under interview pressure, not encyclopedic coverage. Ev
 
 - Put solutions away until you have written an answer or code attempt.
 - For every model, be able to state: assumptions, fit objective, forecast strategy, validation design, and failure mode.
-- Never report a model score without a naive baseline and the forecast horizon.
+- Never report a model score without a naive baseline (a simple reference forecast, such as predicting that the next value will equal the most recent value) and the forecast horizon.
 - If time slips, prioritize Modules 1–5 and the capstone. Deep-learning architecture details are lower yield.
 
 ## Readiness gates

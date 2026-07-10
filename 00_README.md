@@ -4,12 +4,12 @@ An interview-focused course for an experienced data scientist who is new to time
 
 ## Start here
 
-1. Read [STUDY_PLAN.md](STUDY_PLAN.md) and reserve one uninterrupted 10-hour block (or five 2-hour sessions).
-2. Work through [COURSE.md](COURSE.md) in order. Do each checkpoint without looking at the answers.
-3. Run [LABS.py](LABS.py), or use the matching exercises in `COURSE.md` if you prefer paper practice.
-4. Check [SOLUTIONS.md](SOLUTIONS.md) only after making a serious attempt.
-5. Complete [CAPSTONE.md](CAPSTONE.md), then sit [THEORY_TEST.md](THEORY_TEST.md) closed-book.
-6. Grade yourself with [ANSWER_KEY.md](ANSWER_KEY.md).
+1. Read [01_STUDY_PLAN.md](01_STUDY_PLAN.md) and reserve one uninterrupted 10-hour block (or five 2-hour sessions).
+2. Work through [02_COURSE.md](02_COURSE.md) in order. Do each checkpoint without looking at the answers.
+3. Run [03_LABS.py](03_LABS.py), or use the matching exercises in `02_COURSE.md` if you prefer paper practice.
+4. Check [04_SOLUTIONS.md](04_SOLUTIONS.md) only after making a serious attempt.
+5. Complete [05_CAPSTONE.md](05_CAPSTONE.md), then sit [06_THEORY_TEST.md](06_THEORY_TEST.md) closed-book.
+6. Grade yourself with [07_ANSWER_KEY.md](07_ANSWER_KEY.md).
 
 ## What is included
 

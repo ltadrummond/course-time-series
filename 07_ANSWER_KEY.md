@@ -37,7 +37,7 @@
 4. **7:** identical folds (2); sensible preprocessing/models (2); fold distribution plus metric comparison (2); selection before test (1).
 5. **6:** one test evaluation (1); deployment-faithful multi-step simulation (1); diagnostic (1); recommendation covers champion and fallback (1), monitoring (1), limitation/next experiment (1).
 
-Use [CAPSTONE.md](CAPSTONE.md)’s worked outline as the reference architecture. Exact numerical scores vary with implementation and candidate settings; grade correctness of the forecasting simulation above marginal score differences.
+Use [05_CAPSTONE.md](05_CAPSTONE.md)’s worked outline as the reference architecture. Exact numerical scores vary with implementation and candidate settings; grade correctness of the forecasting simulation above marginal score differences.
 
 # Score interpretation
 
