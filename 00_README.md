@@ -4,12 +4,47 @@ An interview-focused course for an experienced data scientist who is new to time
 
 ## Start here
 
-1. Read [01_STUDY_PLAN.md](01_STUDY_PLAN.md) and reserve one uninterrupted 10-hour block (or five 2-hour sessions).
-2. Work through [02_COURSE.md](02_COURSE.md) in order. Do each checkpoint without looking at the answers.
-3. Run [03_LABS.py](03_LABS.py), or use the matching exercises in `02_COURSE.md` if you prefer paper practice.
-4. Check [04_SOLUTIONS.md](04_SOLUTIONS.md) only after making a serious attempt.
-5. Complete [05_CAPSTONE.md](05_CAPSTONE.md), then sit [06_THEORY_TEST.md](06_THEORY_TEST.md) closed-book.
-6. Grade yourself with [07_ANSWER_KEY.md](07_ANSWER_KEY.md).
+You do not need to understand every term on the first read. Work one chapter at a time and use this loop:
+
+1. Read the chapter slowly. Look up or ask about any word that is unclear before continuing.
+2. Answer its checkpoint in plain language. A checkpoint is practice, not an exam.
+3. Do the next matching TODO in [03_LABS.py](03_LABS.py) in JupyterLab. The labs give you hands-on Python practice; the checkpoints test your reasoning.
+4. Only then compare with [04_SOLUTIONS.md](04_SOLUTIONS.md). Focus on why your answer differs, rather than memorising the code.
+5. Continue to the next chapter.
+
+After the course, complete [05_CAPSTONE.md](05_CAPSTONE.md), take [06_THEORY_TEST.md](06_THEORY_TEST.md) without notes, and use [07_ANSWER_KEY.md](07_ANSWER_KEY.md) to review.
+
+## Full learning order
+
+Use this order from beginning to end:
+
+1. Read one chapter of [02_COURSE.md](02_COURSE.md). Stop and ask about any unfamiliar term; understanding matters more than speed.
+2. Attempt the checkpoint at the end of that chapter. Write a short answer in your own words; it is practice, not a graded test.
+3. Complete the next relevant TODO in [03_LABS.py](03_LABS.py) in JupyterLab. The labs are practical Python exercises, and should be done in order from Lab 1 to Lab 6.
+4. Read the matching part of [04_SOLUTIONS.md](04_SOLUTIONS.md) only after making an honest attempt. Correct your work and note the reason for any mistake.
+5. Repeat until you have completed all eight course chapters.
+6. Complete [05_CAPSTONE.md](05_CAPSTONE.md). This is one larger, end-to-end forecasting project that combines the ideas from the course.
+7. Take [06_THEORY_TEST.md](06_THEORY_TEST.md) closed-book: do not consult the course, solutions, notes, or internet while answering.
+8. Use [07_ANSWER_KEY.md](07_ANSWER_KEY.md) to grade the theory test. Review weak topics, then retry the missed questions later without notes.
+
+If the course feels difficult, slow down rather than skipping ahead. You can finish it in the suggested 10 hours, but taking longer is completely fine.
+
+## How the concepts connect in practice
+
+The course follows the real workflow of building a forecast. Each chapter answers a different practical question:
+
+| Chapter | Practical question | What it changes in your ML work |
+|---|---|---|
+| 1. Patterns | What is happening in the data—trend, seasonality, or noise? | Choose useful lags/calendar features and avoid misleading correlations. |
+| 2. Data preparation | Are the dates, missing values, and scale trustworthy? | Build a correct model input table without inventing future information. |
+| 3. Evaluation | What simple forecast must we beat, and how do we test fairly? | Select metrics and time-based validation before comparing models. |
+| 4. Regression | How do we turn history into ML input columns? | Create lags, rolling features, calendar features, and known-future inputs safely. |
+| 5. Classical models | Can level, trend, and seasonality be modeled directly? | Compare ETS/ARIMA with ML models; these are often strong baselines. |
+| 6. ML at scale | How do external inputs and many products/stores change the design? | Choose tree/linear/global models and make grouped features safely. |
+| 7. Deep learning | Is a neural network justified? | Use it only when it wins fairly over simpler models. |
+| 8. Production | Will the forecast remain reliable after launch? | Monitor data, errors, drift, and fall back safely when needed. |
+
+In short: understand the pattern → prepare time-safe data → establish a baseline → create safe features → compare models on future-like periods → deploy and monitor.
 
 ## What is included
 
