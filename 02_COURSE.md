@@ -247,29 +247,56 @@ print("first missing dates:", full[full.isna()].index[:5].tolist())
 # Investigate every gap: it may be a closure, a collection failure, or a future date to forecast.
 
 # 2. Plot the whole history and a recent window.
+# Create one figure (`fig`) containing two vertically stacked plot areas (`history_axes`).
+# The `2, 1` means 2 rows and 1 column: one plot on top of the other.
+# `figsize` is width/height in inches. `sharex=False` lets each plot use its own date range:
+# the full-history chart can show all dates while the 90-day chart can zoom in. With `sharex=True`,
+# both charts would be forced to use the same x-axis range, making the lower zoomed-in chart less useful.
 fig, history_axes = plt.subplots(2, 1, figsize=(12, 6), sharex=False)
+# Plot the `full` sales series in the first/top plot area, using its date index on the x-axis.
+# `title` is simply the text shown above that chart.
 full.plot(ax=history_axes[0], title="Daily sales: full history")
+# `tail(90)` selects the most recent 90 daily rows; plot them in the second/bottom area.
+# This zoomed-in view makes recent changes, missing values, and unusual behaviour easier to spot.
 full.tail(90).plot(ax=history_axes[1], title="Daily sales: most recent 90 days")
 plt.tight_layout()
 
 # Compare the sales distribution for each weekday: 0=Monday, ..., 6=Sunday.
+# `assign` temporarily adds a `dow` column derived from the datetime index; it does not change `df`.
+# `groupby("dow")["y"]` creates one group of sales values per weekday.
 by_dow = df.assign(dow=df.index.dayofweek).groupby("dow")["y"]
+# For each weekday, print the average, middle value, and number of observations.
+# This helps answer: “Are some weekdays usually higher or lower than others?”
 print(by_dow.agg(["mean", "median", "count"]))
+# A boxplot shows the spread of sales for each weekday, not only the average.
+# `column="y"` is what to plot; `by="dow"` makes one box for each weekday.
 df.assign(dow=df.index.dayofweek).boxplot(column="y", by="dow", figsize=(8, 4))
+# Pandas automatically adds a large group title; remove it and add our clearer chart title.
 plt.suptitle("")
 plt.title("Sales distribution by weekday")
 
 # 3. A rolling mean/std show whether level or variation changes over time.
+# `rolling(28)` uses each day and the preceding 27 days as a moving 28-day window.
+# `agg` calculates both the mean (typical level) and std (amount of variation) in every window.
 stats = full.rolling(28).agg(["mean", "std"])
+# Plot the moving average to see gradual growth/decline, then the moving variation to see whether
+# sales are becoming more or less volatile. The first 27 rows are NaN because there is not yet
+# enough history for a complete 28-day window.
 stats["mean"].plot(title="28-day rolling mean")
 stats["std"].plot(title="28-day rolling standard deviation")
 
 # 4. ACF of levels, then changes between days if the level is trending.
+# Create 1 row and 2 columns so the two ACF charts appear side by side.
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+# `dropna()` removes missing sales because the ACF calculation requires real numbers.
+# `lags=35` asks to compare today with values up to 35 days earlier; draw it on the left chart.
 plot_acf(full.dropna(), lags=35, ax=axes[0])
 axes[0].set_title("ACF of sales levels")
+# `diff()` changes sales levels into day-to-day changes. This helps separate a slow trend from
+# short-term repetition. Again remove the first NaN created by the difference, then plot on the right.
 plot_acf(full.diff().dropna(), lags=35, ax=axes[1])
 axes[1].set_title("ACF of day-to-day changes")
+# Prevent labels and titles from overlapping.
 plt.tight_layout()
 
 # 5. If known, mark real-world events on the full-history plot.
@@ -377,29 +404,83 @@ Missingness can itself predict something: a missing machine reading may mean the
 
 Some series become more variable as they become larger. For example, a small shop may vary by 5 sales a day, while a large shop varies by 50. A **transformation** changes the numerical scale to make such patterns easier to model; it does not change what is being predicted.
 
-For non-negative values, `log1p(y)` means `log(1 + y)`. It compresses large values more than small ones, often reducing a long right tail and making percentage-like variation more stable. Box–Cox is a related family of transformations. When converting a log forecast back, be careful: exponentiating an average log forecast usually gives a **median-like** answer, not the arithmetic mean (this is Jensen’s inequality). A residual-variance correction under Gaussian log errors is approximately
+### Log transformation: make large values less dominant
 
-\[
-E[Y]\approx \exp(\hat\mu + \hat\sigma^2/2).
-\]
+For non-negative values, `log1p(y)` means `log(1 + y)`, using the natural logarithm. The `+1` lets it handle zero sales because `log(0)` is undefined.
 
-A **difference** is a change rather than a level. A first difference asks “how much did sales change since yesterday?” A seasonal difference asks “how different is this Monday from last Monday?” They are
+```text
+Sales y:        0       9       99       999
+log1p(y):       0    2.30     4.61      6.91
+```
 
-\[
-\nabla y_t=y_t-y_{t-1},\qquad \nabla_m y_t=y_t-y_{t-m}.
-\]
+The important idea is that the log scale **compresses** large values. A 100-sale increase matters less on the log scale when it happens to a large shop:
 
-Differencing can remove a changing level or a repeating seasonal pattern, allowing models to focus on the remaining dynamics. **Over-differencing** means differencing more than needed; it adds noise and can create artificial negative autocorrelation. Save the initial values, because you need them to convert predicted changes back into predicted sales levels.
+```text
+10 sales  -> 20 sales:   log1p changes by about 0.65
+100 sales -> 200 sales:  log1p changes by about 0.69
+```
+
+Both changes are approximately a doubling, so they look similarly sized after the transformation even though one is 10 extra sales and the other is 100. This can help when a series has multiplicative/percentage-like variation: big shops naturally have bigger absolute swings than small shops.
+
+To return a log-scale forecast to sales, use the inverse operation:
+
+```text
+log-scale forecast = μ
+typical sales forecast = exp(μ) − 1
+```
+
+For a first pass, this inverse is enough. Advanced note: when log-scale errors have substantial variance, `exp(μ) − 1` is closer to a median than a mean. If the log errors are approximately Gaussian with variance `σ²`, a mean correction is:
+
+```text
+mean sales forecast ≈ exp(μ + σ² / 2) − 1
+```
+
+You do not need to memorise this correction yet; validate whether a log transform improves future forecasts before worrying about it. Box–Cox is a more general family of similar transformations.
+
+### Differencing: model changes instead of levels
+
+A **difference** changes the target from “how many sales?” to “how much did sales change?”
+
+```text
+Day:             Mon    Tue    Wed
+Sales:           100    110    105
+
+First difference:         +10     -5
+                         (Tue−Mon)(Wed−Tue)
+```
+
+So the first difference is simply:
+
+```text
+change today = sales today − sales yesterday
+```
+
+A **seasonal difference** compares the same position in a repeating pattern. For daily data with weekly seasonality, compare each day with 7 days earlier:
+
+```text
+Sales last Monday:     100
+Sales this Monday:     112
+Seasonal difference:   +12  = 112 − 100
+```
+
+In compact mathematical notation, where `y_t` means sales today and `m` is the seasonal period:
+
+```text
+first difference:      y_t − y_(t−1)    = today minus yesterday
+seasonal difference:   y_t − y_(t−m)    = today minus the same point last season
+```
+
+Differencing can remove a gradual trend or a repeating seasonal pattern, allowing ARIMA-style models to focus on the remaining changes. If you forecast a change, convert it back to a sales forecast by adding it to the earlier known sales value. **Over-differencing** means taking more differences than needed; it adds noise and can create an artificial up-down pattern (negative autocorrelation).
 
 The equivalent pandas operations are:
 
 ```python
-s = daily["sales"]
-daily["log1p_sales"] = np.log1p(s)       # only valid when sales are >= 0
-daily["change_from_yesterday"] = s.diff(1)
-daily["change_from_last_week"] = s.diff(7)
+s = daily["sales"]  # Replace "sales" with your target column, such as "demand".
+daily["log1p_sales"] = np.log1p(s)       # compress large non-negative values
+daily["change_from_yesterday"] = s.diff(1)  # today minus yesterday
+daily["change_from_last_week"] = s.diff(7)  # today minus 7 days ago
 
-# Convert a log-scale prediction back to the original sales scale.
+# Convert a log-scale prediction back to the original sales scale: exp(log forecast) − 1.
 log_forecast = 4.2
 sales_forecast = np.expm1(log_forecast)
 ```
@@ -420,20 +501,28 @@ Given hourly energy, temperature, tariff, and machine-status data:
 
 ### Flashcards
 
-- **Q:** `asfreq` versus `resample`? **A:** Reindex to a frequency versus aggregate into time bins.
-- **Q:** Why add missing indicator? **A:** Missingness itself may carry predictive information.
-- **Q:** When is forward fill meaningful? **A:** For a persistent state whose last value was known at forecast time.
-- **Q:** Why can exponentiating a log forecast be biased? **A:** A nonlinear inverse does not commute with expectation.
-- **Q:** Risk of over-differencing? **A:** Inflated variance and artificial negative autocorrelation.
+- **Q:** `asfreq` versus `resample`? **A:** `asfreq("D")` creates an expected row for every day and exposes missing days as `NaN`; it does not combine values. `resample("W").sum()` groups existing daily values into weeks and aggregates them.
+- **Q:** Why add a missingness indicator? **A:** A `0/1` column can tell the model that a value was missing. Missingness may carry information—for example, a missing sensor reading can signal a sensor problem rather than an ordinary reading.
+- **Q:** When is forward fill meaningful? **A:** Only for a value that persists and was already known, such as a machine setting that remains active until changed. Do not forward-fill changing targets such as daily sales.
+- **Q:** Why can exponentiating a log forecast be biased? **A:** `exp(average log value)` is usually not the same as `average original value`. It is closer to a typical/median-like outcome; the difference grows when log-scale uncertainty is large.
+- **Q:** What is the risk of over-differencing? **A:** Turning an already-stable series into noisy changes. The differenced series can bounce artificially up/down, producing negative autocorrelation and worse forecasts.
 
 ### Cheat sheet
 
 ```python
+# Add every expected calendar day to the datetime index; absent days get NaN.
 s.asfreq("D")
+# Group into Monday-starting weekly bins and add the values in each bin.
+# `label`/`closed` control which date labels and boundaries each weekly bin uses.
 s.resample("W-MON", label="left", closed="left").sum()
-s.shift(1)                 # previous observation; not index movement
-s.diff(1); s.diff(7)
-np.log1p(s); np.expm1(z)
+# Move values down one row: today receives yesterday's value. The dates themselves do not move.
+s.shift(1)
+# Calculate changes: today minus yesterday, then today minus 7 days ago.
+s.diff(1)
+s.diff(7)
+# Transform non-negative values to/from a compressed log scale.
+np.log1p(s)
+np.expm1(z)
 ```
 
 ---
@@ -446,12 +535,35 @@ This chapter answers three practical questions: “What simple forecast must my 
 
 A **baseline** is a deliberately simple forecast. It sets the minimum standard. If a complicated model cannot beat it on future-like data, do not use the complicated model.
 
-A model is useful only relative to a credible low-complexity alternative.
+A model is useful only relative to a credible low-complexity alternative. In the notation below, `T` means the last observed time, `h` means how many steps ahead we predict, and `ŷ` (read “y-hat”) means a forecast.
 
-- Mean: \(\hat y_{T+h}=\bar y\)
-- Naive/random walk: \(\hat y_{T+h}=y_T\)
-- Drift: \(\hat y_{T+h}=y_T+h(y_T-y_1)/(T-1)\)
-- Seasonal naive: \(\hat y_{T+h}=y_{T+h-m(k+1)}\), equivalently repeat the latest season.
+- **Mean:** predict the average of all past sales. Plain language: “sales will be about their historical average.”
+
+  ```text
+  past sales: 40, 50, 60  ->  mean forecast: (40 + 50 + 60) / 3 = 50
+  ```
+
+- **Naive / random walk:** predict that the future equals the most recent observation. Plain language: “tomorrow will be like today.”
+
+  ```text
+  sales today: 60  ->  forecast for tomorrow: 60
+  ```
+
+- **Drift:** continue the average change seen from the first observation to the latest one. Plain language: “sales have grown by about 1 per day, so add roughly 1 for each day ahead.”
+
+  ```text
+  first sale level: 50; latest level: 80 after 30 days
+  average drift: (80 − 50) / 30 = 1 sale/day
+  forecast 7 days ahead: 80 + 7 × 1 = 87
+  ```
+
+- **Seasonal naive:** repeat the value from the same position in the latest season. For daily weekly seasonality, plain language: “next Tuesday will equal last Tuesday.”
+
+  ```text
+  last Tuesday's sales: 55  ->  forecast for next Tuesday: 55
+  ```
+
+Technical notation, only for reference: mean `ŷ(T+h) = average past y`; naive `ŷ(T+h) = y(T)`; drift `ŷ(T+h) = latest value + h × average past change`; seasonal naive repeats the latest season of length `m` (use `m = 7` for daily weekly data).
 
 For example, a **naive** forecast for Tuesday says “Tuesday will equal Monday.” A **seasonal-naive** forecast for Tuesday says “Tuesday will equal last Tuesday.” For daily retail data, lag-7 seasonal naive is usually the minimum bar. Compare against any forecast the business already uses too.
 
@@ -499,7 +611,12 @@ def forecast_metrics(actual, prediction, insample, seasonal_period=7):
     mae = error.abs().mean()
     rmse = np.sqrt((error**2).mean())
     bias = error.mean()                     # positive means over-forecasting
+    # Measure how wrong the seasonal-naive baseline was *inside training data*:
+    # diff(7) = today's sales − sales 7 days ago (same weekday last week).
+    # abs() ignores whether it was too high or low; dropna() removes the first 7 rows,
+    # which have no earlier weekday to compare; mean() gives its typical absolute error.
     naive_mae = insample.diff(seasonal_period).abs().dropna().mean()
+    # MASE compares our model's MAE with that baseline: below 1 means our model is better.
     mase = mae / naive_mae
     return {"mae": mae, "rmse": rmse, "bias": bias, "mase": mase}
 
@@ -536,17 +653,27 @@ This function creates expanding-window folds for a one-series dataset. Each fold
 
 ```python
 def rolling_origins(n_rows, initial_train=365, horizon=14, step=30):
+    # Start with 365 observations for training. Each loop acts like a new historical
+    # forecast date: train on everything before `train_end`, then predict the next 14 rows.
     for train_end in range(initial_train, n_rows - horizon + 1, step):
+        # Row positions 0 through train_end−1: all available history for this fold.
         train_idx = np.arange(train_end)
+        # The immediately following 14 row positions: the future period to validate on.
         valid_idx = np.arange(train_end, train_end + horizon)
+        # `yield` returns one pair of indices at a time, so the function is a generator.
+        # `step=30` means move the next simulated forecast origin forward by 30 rows/days.
         yield train_idx, valid_idx
 
 for train_idx, valid_idx in rolling_origins(len(y)):
+    # `.iloc` selects rows by their integer positions, using the current fold's indices.
     train_fold = y.iloc[train_idx]
     valid_fold = y.iloc[valid_idx]
     # Fit only with train_fold; score predictions against valid_fold.
+    # Print the final training date -> first validation date to verify the timeline.
     print(train_fold.index[-1], "->", valid_fold.index[0])
 ```
+
+With the defaults, the first fold uses the first 365 days to predict the next 14 days. The second fold moves 30 days later, uses the first 395 days for training, and predicts the following 14 days. This repeated historical simulation is why it tests a forecast more realistically than a random split.
 
 ### Why this matters in practice
 
@@ -590,32 +717,69 @@ This chapter turns a timeline into a normal machine-learning table. Each row rep
 
 **Feature engineering** means creating useful input columns from raw data. For daily sales, a row for 15 July might include yesterday’s sales, sales seven days ago, the weekday, whether there is a promotion, and the planned price. The **target** for that row is the sales value we want the model to learn to predict.
 
-**Regression** learns a rule that combines these input columns to predict a numerical target. The equation below says: today’s value is estimated from past target values (lags), other inputs, and a leftover error.
+**Regression** learns a rule that combines input columns to predict a numerical target. Think of it as a weighted recipe. For example, a simple daily-sales regression might learn:
 
-A dynamic regression can be written
+```text
+predicted sales today =
+    base level
+  + (weight for yesterday's sales × yesterday's sales)
+  + (weight for last week's sales × sales 7 days ago)
+  + (promotion effect × whether there is a promotion today)
+  + (price effect × today's planned price)
+```
 
-\[
-y_t=\beta_0+\sum_{j\in L}\beta_jy_{t-j}+\gamma^Tx_t+\epsilon_t.
-\]
+For a particular fitted model, the learned rule might look like this:
 
-OLS (ordinary least squares) chooses the coefficients that make squared prediction errors as small as possible. A **residual** is `actual − model prediction`. If residuals remain autocorrelated, the model has left predictable time structure unexplained. This does not automatically make every coefficient wrong, but it is a warning that the model is incomplete.
+```text
+predicted sales = 12 + 0.3 × yesterday's sales + 0.5 × last week's sales
+                      + 8 × promotion − 2 × price
+```
+
+The numbers (`12`, `0.3`, `0.5`, `8`, and `−2`) are **coefficients** learned from historical data. A positive coefficient adds to the forecast; a negative coefficient subtracts from it. These numbers are only an example—not universal truths about sales.
+
+Technical notation, for reference only:
+
+```text
+y_t = β₀ + β₁ × y_(t−1) + β₇ × y_(t−7) + γ × x_t + ε_t
+```
+
+Read it as: “sales today = base level + contribution from yesterday + contribution from last week + contribution from other inputs + unexplained leftover.” Here `x_t` represents other input columns, such as price or promotion, and `ε_t` is the leftover error.
+
+OLS (**ordinary least squares**) chooses the coefficients that make squared prediction errors as small as possible. Squaring makes a very large mistake count much more than a small one. A **residual** is:
+
+```text
+residual = actual sales − predicted sales
+```
+
+For example, if actual sales are 80 and the model predicts 74, the residual is `+6`: the model under-forecast by 6. If it predicts 86 instead, the residual is `−6`: it over-forecast by 6.
+
+Residuals should look mostly random after a good forecast. If residuals remain autocorrelated—for example, they are repeatedly positive every Monday—the model is systematically under-predicting Mondays. It has left a predictable pattern unexplained. Possible next steps are to add a weekday feature, a lag-7 feature, a seasonal model, or another missing known input. This does not automatically make every existing coefficient wrong, but it is a warning that the model is incomplete.
 
 Useful features:
 
-- **Lags:** earlier target values, such as sales 1, 7, 14, or 28 days ago.
-- **Rolling summaries:** summaries of earlier values, such as the average sales over the preceding 28 days. EWMA is a rolling average that gives more weight to recent days.
-- **Calendar features:** day of week, month, holiday, or payday.
-- **Age/trend:** elapsed time or a simple time counter so a model can represent gradual growth or decline.
-- **Fourier seasonality:** pairs of sine/cosine columns that represent a smooth repeating shape; useful when a simple weekday category is too abrupt.
-- **Known-future inputs:** values already known at forecast time, such as planned price, promotion, or holiday.
-- **Observed-only inputs:** values only measured once they happen, such as actual temperature; lag them or forecast them separately.
+- **Lags:** earlier target values, such as sales 1, 7, 14, or 28 days ago. Example: a `lag_7` value for this Tuesday is sales from last Tuesday.
+- **Rolling summaries:** summaries of earlier values, such as the average sales over the preceding 28 days. They describe the recent level without relying on one day alone. EWMA is a rolling average that gives more weight to recent days.
+- **Calendar features:** day of week, month, holiday, or payday. Example: a model can learn that Saturdays are usually busier.
+- **Age/trend:** elapsed time or a simple time counter so a model can represent gradual growth or decline. Example: `0, 1, 2, ...` for successive days.
+- **Fourier seasonality:** pairs of sine/cosine columns that represent a smooth repeating shape; useful when a simple weekday category is too abrupt. They are often used for annual patterns that smoothly rise into summer and fall afterward.
+- **Known-future inputs:** values already known at forecast time, such as planned price, promotion, or holiday. These can be used for future forecast dates.
+- **Observed-only inputs:** values only measured once they happen, such as actual temperature. Lag them or forecast them separately; do not use next week’s actual temperature in a forecast made today.
 
 Critical pattern:
 
 ```python
+# Group rows by store first. Every following lag/average is calculated separately per store,
+# so Store A never accidentally uses Store B's sales history.
+# `group_keys=False` keeps the original dataframe's simple index when results are put back.
 g = df.groupby("store", group_keys=False)
+# For each store, shift sales by 7 rows: this row receives that store's sales from 7 days ago.
 df["lag_7"] = g.y.shift(7)
+# For each store's sales series `s`, shift first so today's target is excluded, then calculate
+# the average of the preceding 28 values. `transform` returns one result per original row,
+# allowing it to be assigned as a normal dataframe column.
 df["roll28_mean"] = g.y.transform(lambda s: s.shift(1).rolling(28).mean())
+# EWMA = exponentially weighted moving average. It is also shifted first for safety.
+# `alpha=.2` gives more weight to recent days and progressively less weight to older days.
 df["ewm"] = g.y.transform(lambda s: s.shift(1).ewm(alpha=.2).mean())
 ```
 
@@ -626,22 +790,34 @@ For one daily series, this builds a small feature table and fits a Ridge model w
 ```python
 from sklearn.linear_model import Ridge
 
+# Work on a separate copy so the original `df` remains unchanged.
 feat = df.copy()
+# Make four lag columns. For example, `lag_7` on Tuesday is last Tuesday's target value.
 for lag in [1, 7, 14, 28]:
     feat[f"lag_{lag}"] = feat["y"].shift(lag)
+# A past-only 7-day average: shift excludes the target value for the row being predicted.
 feat["roll_7_mean"] = feat["y"].shift(1).rolling(7).mean()
+# Turn the datetime index into weekday numbers: Monday=0, ..., Sunday=6.
 feat["dow"] = feat.index.dayofweek
+# A time counter gives a linear model a chance to learn gradual growth or decline.
 feat["trend"] = np.arange(len(feat))
 
 # One-hot weekday columns let a linear model learn a different weekday adjustment.
+# For example, `dow_0` is 1 on Mondays and 0 on all other days.
 feat = pd.get_dummies(feat, columns=["dow"], dtype=float)
+# Use every created column except `y` as an input; `y` is the target we want to predict.
 feature_columns = [c for c in feat.columns if c != "y"]
 
+# Reserve the last 90 days as later, unseen test data. `cutoff` is the last training date.
 cutoff = feat.index.max() - pd.Timedelta(days=90)
+# `dropna()` removes early rows with missing lags/rolling averages and any unknown targets.
 train_rows = feat.loc[:cutoff].dropna()
 test_rows = feat.loc[cutoff + pd.Timedelta(days=1):].dropna()
 
+# Fit Ridge on training inputs and their known targets. `alpha=10` controls how strongly
+# coefficients are shrunk toward zero to reduce instability from correlated lag columns.
 model = Ridge(alpha=10).fit(train_rows[feature_columns], train_rows["y"])
+# Predict targets for the later rows, then wrap the NumPy predictions in a Series so dates remain attached.
 ridge_prediction = pd.Series(
     model.predict(test_rows[feature_columns]), index=test_rows.index
 )
@@ -705,10 +881,16 @@ Build a daily demand design matrix with lags 1/7/14/28, past-only rolling 7/28 m
 ### Cheat sheet
 
 ```python
-for lag in [1, 7, 14, 28]: df[f"lag{lag}"] = df.y.shift(lag)
+# Create lags for 1, 7, 14, and 28 days. Each row receives an earlier target value.
+for lag in [1, 7, 14, 28]:
+    df[f"lag{lag}"] = df.y.shift(lag)
+# Create a safe 28-day average of earlier values; shift first to exclude today's target.
 df["r28"] = df.y.shift(1).rolling(28).mean()
-df["sin7"] = np.sin(2*np.pi*np.arange(len(df))/7)
-# Pipeline preprocessing must be fit inside each fold.
+# Create one smooth weekly Fourier feature. `np.arange` is 0, 1, 2, ...;
+# dividing by 7 repeats the sine wave every 7 rows/days. In practice add a matching cosine feature too.
+df["sin7"] = np.sin(2 * np.pi * np.arange(len(df)) / 7)
+# Pipeline preprocessing (for example, scaling or one-hot fitting) must be fit inside each training fold,
+# then applied to that fold's validation data. Otherwise validation information leaks into training.
 ```
 
 ---
@@ -721,39 +903,76 @@ This chapter introduces classical time-series models. They work directly with a 
 
 **Exponential smoothing** estimates the current underlying level by averaging past observations while giving more weight to recent ones. ETS stands for **Error, Trend, Seasonal**: a family of models that explicitly tracks these components.
 
-Simple exponential smoothing updates level:
+### Start with a smoothed level
 
-\[
-\ell_t=\alpha y_t+(1-\alpha)\ell_{t-1},\qquad \hat y_{t+h|t}=\ell_t.
-\]
+Simple exponential smoothing keeps an estimate of the current underlying **level**—the typical sales amount after ignoring one-day noise. Each new observation updates that estimate by mixing:
 
-In the equation, \(\ell_t\) is the estimated current **level** and \(\alpha\) controls how quickly it reacts: a larger \(\alpha\) trusts the newest observation more. Holt’s method adds a trend estimate. Holt–Winters adds seasonality. In additive Holt–Winters:
+```text
+new smoothed level =
+    (weight on today's sales × today's sales)
+  + (weight on previous level × previous smoothed level)
+```
 
-\[
-\ell_t=\alpha(y_t-s_{t-m})+(1-\alpha)(\ell_{t-1}+b_{t-1}),
-\]
-\[
-b_t=\beta(\ell_t-\ell_{t-1})+(1-\beta)b_{t-1},
-\]
-\[
-s_t=\gamma(y_t-\ell_t)+(1-\gamma)s_{t-m}.
-\]
+The two weights add to 1. The setting `alpha` controls the balance:
 
-Here, \(b_t\) is the trend and \(s_t\) is the seasonal effect. A **damped trend** assumes growth will gradually slow rather than continuing forever in a straight line. ETS is often a strong choice for a smooth series with clear level, trend, and seasonality but few outside inputs.
+```text
+Previous level estimate: 100 sales
+Today's actual sales:    120 sales
+
+alpha = 0.2  -> new level = 0.2 × 120 + 0.8 × 100 = 104  (react slowly)
+alpha = 0.8  -> new level = 0.8 × 120 + 0.2 × 100 = 116  (react quickly)
+```
+
+With simple exponential smoothing, the forecast for all future days is just the latest smoothed level. It is suitable when there is no meaningful trend or repeating seasonal pattern.
+
+### Add trend and seasonality when needed
+
+**Holt’s method** adds a trend estimate: “are sales typically rising or falling each period?” **Holt–Winters** adds a seasonal estimate: “is this weekday/month normally above or below the level?” For an additive weekly model, think of every forecast as:
+
+```text
+forecast = current level + expected trend movement + seasonal adjustment
+```
+
+For example:
+
+```text
+current level:             100 sales
+estimated one-day trend:    +1 sale/day
+usual Saturday adjustment: +12 sales
+forecast for Saturday:     100 + 1 + 12 = 113 sales
+```
+
+The model continually updates three smoothed estimates:
+
+```text
+level      = typical sales after removing today's seasonal effect
+trend      = the recent direction of that level
+seasonality = the usual extra/subtracted amount for this weekday or month
+```
+
+The traditional symbols are `ℓ` for level, `b` for trend, `s` for seasonality, and `alpha`, `beta`, `gamma` for how quickly each estimate reacts. You do not need to memorise the update equations: libraries estimate these smoothing settings for you. A **damped trend** assumes growth will gradually slow rather than continuing forever in a straight line. ETS is often strong for a smooth series with clear level, trend, and seasonality but few outside inputs.
 
 This is a minimal additive ETS forecast for daily data with weekly seasonality:
 
 ```python
+# Import the ETS / Holt-Winters implementation.
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
+# `train` is the chronological target series used to learn level, trend, and weekly effects.
 ets = ExponentialSmoothing(
     train,
+    # Add a linear trend in the original sales units, such as +1 sale/day.
     trend="add",
+    # Let that trend gradually flatten at long horizons instead of growing forever.
     damped_trend=True,
+    # Add a fixed-size seasonal adjustment, such as Saturday usually being +12 sales.
     seasonal="add",
+    # The pattern repeats every 7 observations because this is daily data with weekly seasonality.
     seasonal_periods=7,
+    # Fit chooses the smoothing settings (alpha, beta, gamma) from the training data.
 ).fit(optimized=True)
 
+# Produce 14 future daily forecasts using the learned level, trend, and weekly adjustments.
 ets_prediction = ets.forecast(14)
 ```
 
